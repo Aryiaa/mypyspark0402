@@ -1,5 +1,6 @@
-from pyspark.sql import SparkSession, SQLContext
+from pyspark.sql import SparkSession, SQLContext, Window
 import os
+import pyspark.sql.functions as F
 
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, LongType, ArrayType,DataType
 
@@ -64,31 +65,62 @@ def create_df_from_sql(spark):
     dbdf = spark.sql(sql)
     dbdf.show()
 
-
-
-
-
-
-schema = StructType([
-    StructField("user_id", IntegerType(), False),
-    StructField("duration", StringType(), False),
-    StructField("subject_1", IntegerType(), True),
-    StructField("item_id", IntegerType(), True),
-    StructField("create_time", StringType(), True) ]
-)
-
-# str1=StructType([StructField('user_id'),IntegerType(),True])
-def read_csv(spark):
-    df = spark.read.csv('./data1.csv', header=True,schema=schema)
-    print(df.dtypes)
+def write_csv(spark):
+    """
+    数据库读取数据并保存到csv
+    :param spark:
+    :return:
+    """
+    register_db(ctx=ctx, url=con['url'],table=con['table'], password=con['password'], user=con['user'], registertable='mytable')
+    sql = '''select user_id,duration,subject_1,item_id,create_time from mytable '''
+    df = spark.sql(sql)
+    df.write.csv("./data1.csv",mode='overwrite',header=True)
     df.show()
+    pass
+
+def read_csv(spark):
+    """
+    header 是否第一行作为header
+    schema 
+    :param spark:
+    :return:
+    """
+
+    schema = StructType([
+        StructField("user_id", IntegerType(), False),
+        StructField("duration", IntegerType(), False),
+        StructField("subject_1", IntegerType(), True),
+        StructField("item_id", IntegerType(), True),
+        StructField("create_time", IntegerType(), True)]
+    )
+    df = spark.read.csv('./data1.csv', header=True, schema=schema)
+    # print(df.dtypes)
+    # df.show()
+    return df
+
+def group_and_topn(spark,n=0):
+    """
+    以data.csv 为数据源，以item_id和subject_1分组取最新的create_time 前3ge
+    :param spark:
+    :param n:
+    :return:
+    """
+    df=read_csv(spark)
+    window = Window.partitionBy("user_id", 'item_id', 'subject_1').orderBy(df["create_time"].desc())
+    df = df.withColumn('topn', F.row_number().over(window))
+    df = df.where(df.topn <= 3)
+    df.show()
+
+
+
+
+
+    
+
+
+
 if __name__ == '__main__':
     spark, ctx = create_spark('firstdemo')
-    #
-    # register_db(ctx=ctx, url=con['url'],table=con['table'], password=con['password'], user=con['user'], registertable='mytable')
-    # sql = '''select user_id,duration,subject_1,item_id,create_time from mytable '''
-    # df = spark.sql(sql)
-    # df.write.csv("./data1.csv",mode='overwrite',header=True)
-    # df.show()
-    read_csv(spark)
-    spark.stop()
+    # read_csv(spark)
+    # spark.stop()
+    group_and_topn(spark)

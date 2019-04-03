@@ -3,6 +3,9 @@ import os
 import pyspark.sql.functions as F
 
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, LongType, ArrayType,DataType
+from datetime import datetime
+from pyspark.sql.functions import udf, Column
+
 
 from conf.conf import con
 
@@ -112,15 +115,25 @@ def group_and_topn(spark,n=0):
     df.show()
 
 
+def get_time(s):
+    try:
+        res = datetime.fromtimestamp(int(s)).strftime(("%Y-%m-%d"))
+        return res
+    except:
+        return ''
 
 
+time_udfs = udf(get_time, StringType())
 
-    
+# 使用
+# df.select('id',time_udfs()).distinct()
 
 
 
 if __name__ == '__main__':
     spark, ctx = create_spark('firstdemo')
-    # read_csv(spark)
+    df=read_csv(spark)
+    # df.show()
+    df.select('user_id',time_udfs(df['create_time'])).distinct().show()
     # spark.stop()
-    group_and_topn(spark)
+    # group_and_topn(spark)
